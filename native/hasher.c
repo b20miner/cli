@@ -15,6 +15,8 @@
  * when <count> nonces were tried without a result. The caller re-verifies
  * every "F" line with pow-reference before submitting it.
  */
+/* clock_gettime and CLOCK_MONOTONIC are POSIX; glibc hides them under -std=c11. */
+#define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
