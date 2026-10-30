@@ -1,6 +1,6 @@
 # B20MINER CLI (Base Sepolia)
 
-A terminal miner for **Launchpad tokens** on Base Sepolia. It keeps its own wallet on your computer: that wallet sends the proofs and pays each fee and gas. Every accepted proof credits the rewards wallet — the CLI's wallet, or your own wallet if you choose it at the first start (only its address; never its key) — and the mined tokens arrive there when the token's pool opens. Test network only: tokens here have no value. Full specification: [`docs/CLI_MINER_V1.md`](../docs/CLI_MINER_V1.md).
+A terminal miner for **Launchpad tokens** on Base Sepolia. It keeps its own wallet on your computer: that wallet sends the proofs and pays each fee and gas. Every accepted proof credits the rewards wallet — the CLI's wallet, or your own wallet if you choose it at the first start (only its address; never its key) — and the mined tokens arrive there when the token's pool opens. Test network only: tokens here have no value. Full guide: [docs.b20miner.xyz/reference/cli](https://docs.b20miner.xyz/reference/cli/).
 
 Creating tokens and trading stay on the Launchpad website (`launch.b20miner.xyz`).
 
@@ -23,7 +23,9 @@ On macOS the fast native hasher ships prebuilt. On Linux it is built once on fir
 ### From the repository (development)
 
 ```bash
-~/Desktop/b20mine/cli/install.sh
+git clone https://github.com/b20miner/cli.git
+cd cli
+./install.sh
 ```
 
 ## Use
