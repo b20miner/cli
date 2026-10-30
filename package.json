@@ -1,0 +1,50 @@
+{
+  "name": "b20miner",
+  "version": "0.3.3",
+  "description": "B20MINER CLI — mine B20MINER Launchpad tokens on Base Sepolia from the terminal, with a wallet kept on this computer (test network).",
+  "type": "module",
+  "bin": {
+    "b20miner": "dist/main.js"
+  },
+  "files": [
+    "dist",
+    "native/hasher.c",
+    "native/prebuilt",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:hasher": "cc -O3 -std=c11 -Wall -Wextra -o native/b20miner-hasher native/hasher.c",
+    "build:prebuilt": "node scripts/build-prebuilt.mjs",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && npm run build:prebuilt",
+    "prepack": "npm run build && npm test",
+    "b20miner": "node src/main.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "b20miner",
+    "launchpad",
+    "base",
+    "sepolia",
+    "pow",
+    "miner",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "viem": "2.56.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.5",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "b20minerDeployment": {
+    "chainId": 84532,
+    "launchpad": "0x315Ce9b1a8473e3b2D10d4195F15470A66b7848d",
+    "b20Mining": "0x315Ce9b1a8473e3b2D10d4195F15470A66b7848d"
+  }
+}

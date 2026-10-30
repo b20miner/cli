@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# B20MINER CLI launcher. Works when called through a symlink (e.g. ~/.local/bin/b20miner).
+SELF="$0"
+while [ -L "$SELF" ]; do
+  LINK="$(readlink "$SELF")"
+  case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
+done
+DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$MAJOR" -lt 24 ]; then
+  echo "B20MINER CLI needs Node.js 24 or newer (found: $(node --version 2>/dev/null || echo none))." >&2
+  exit 1
+fi
+exec node --no-warnings=ExperimentalWarning "$DIR/src/main.ts" "$@"

@@ -1,0 +1,27 @@
+{
+  "schema": "B20_POW_V1_TEST_VECTORS",
+  "domain": "B20_POW_V1",
+  "note": "Independently derived (Python/pycryptodome Keccak-256, not NIST SHA3-256) before either the Solidity library or this TypeScript reference module was written. Both implementations must reproduce these hashes exactly.",
+  "vectors": [
+    {
+      "name": "canonical",
+      "chainId": "8453",
+      "miningContract": "0x1111111111111111111111111111111111111111",
+      "snapshotWallet": "0x2222222222222222222222222222222222222222",
+      "miningWallet": "0x3333333333333333333333333333333333333333",
+      "challenge": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "nonce": "123456789",
+      "expectedHash": "0x14467ce4d90f928a400417a20fa4f10789915962352157f13955b8cd1442a41b"
+    },
+    {
+      "name": "max_nonce",
+      "chainId": "8453",
+      "miningContract": "0x1111111111111111111111111111111111111111",
+      "snapshotWallet": "0x2222222222222222222222222222222222222222",
+      "miningWallet": "0x3333333333333333333333333333333333333333",
+      "challenge": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "nonce": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+      "expectedHash": "0x28c958f8e6d124fcc5f2b39b05e056ba013a969ec20188c4dc8ad10d56c28a6e"
+    }
+  ]
+}

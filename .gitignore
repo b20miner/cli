@@ -1,0 +1,6 @@
+node_modules/
+dist/
+native/b20miner-hasher
+native/b20miner-hasher.exe
+native/prebuilt/
+*.tgz
