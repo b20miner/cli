@@ -1,5 +1,7 @@
 # B20MINER CLI (Base Sepolia)
 
+> **Not available right now.** The version on npm (0.3.2) mines an earlier test Launchpad that has been replaced. The new version in this repository (0.3.3) is ready and waiting to be published on npm. Until then, mine in the browser on [launch.b20miner.xyz](https://launch.b20miner.xyz). Status: [docs.b20miner.xyz/reference/cli](https://docs.b20miner.xyz/reference/cli/).
+
 A terminal miner for **Launchpad tokens** on Base Sepolia. It keeps its own wallet on your computer: that wallet sends the proofs and pays each fee and gas. Every accepted proof credits the rewards wallet — the CLI's wallet, or your own wallet if you choose it at the first start (only its address; never its key) — and the mined tokens arrive there when the token's pool opens. Test network only: tokens here have no value. Full guide: [docs.b20miner.xyz/reference/cli](https://docs.b20miner.xyz/reference/cli/).
 
 Creating tokens and trading stay on the Launchpad website (`launch.b20miner.xyz`).
