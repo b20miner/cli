@@ -43,29 +43,28 @@ export type Progress = (hashesTried: number, hashRate: number) => void;
 const EXE = process.platform === "win32" ? ".exe" : "";
 const NATIVE_DIR = fileURLToPath(new URL("../native/", import.meta.url));
 
-export type HasherKind = "prebuilt" | "local build" | "built on this machine" | "built-in (slower)";
+export type HasherKind = "local build" | "built on this machine" | "built-in (slower)";
 let resolved: { path: string | null; kind: HasherKind } | null = null;
 
 /**
  * Where the native hasher comes from, in order:
- * 1. a prebuilt binary shipped in the package for this OS/CPU;
- * 2. a binary built in the repository (`npm run build:hasher`);
- * 3. a one-time build of the bundled hasher.c with the system C compiler,
+ * 1. a binary built in the repository (`npm run build:hasher`);
+ * 2. a one-time build of the bundled hasher.c with the system C compiler,
  *    cached in ~/.b20miner/bin;
- * 4. none: the slower built-in JS hasher.
+ * 3. none: the slower built-in JS hasher.
+ * The package ships no binaries: what runs is built here, from the source in
+ * the package.
  */
 export function resolveHasher(): { path: string | null; kind: HasherKind } {
   if (resolved) return resolved;
   // B20MINER_HASHER=js forces the built-in hasher (used to test the fallback).
   if (process.env.B20MINER_HASHER === "js") return (resolved = { path: null, kind: "built-in (slower)" });
-  const prebuilt = join(NATIVE_DIR, "prebuilt", `${process.platform}-${process.arch}`, `b20miner-hasher${EXE}`);
   const local = join(NATIVE_DIR, `b20miner-hasher${EXE}`);
   const cached = join(homeDir(), "bin", `b20miner-hasher-${VERSION}-${process.platform}-${process.arch}${EXE}`);
-  if (existsSync(prebuilt)) return (resolved = { path: prebuilt, kind: "prebuilt" });
   if (existsSync(local)) return (resolved = { path: local, kind: "local build" });
   if (existsSync(cached)) return (resolved = { path: cached, kind: "built on this machine" });
   const source = join(NATIVE_DIR, "hasher.c");
-  if (existsSync(source)) {
+  if (existsSync(source) && compilerInstalled()) {
     mkdirSync(join(homeDir(), "bin"), { recursive: true, mode: 0o700 });
     for (const cc of ["cc", "gcc", "clang"]) {
       const out = spawnSync(cc, ["-O3", "-std=c11", "-o", cached, source], { stdio: "ignore" });
@@ -76,6 +75,24 @@ export function resolveHasher(): { path: string | null; kind: HasherKind } {
     }
   }
   return (resolved = { path: null, kind: "built-in (slower)" });
+}
+
+/**
+ * On macOS, /usr/bin/cc is a stub until the Command Line Tools are
+ * installed, and calling it opens Apple's install dialog. Ask xcode-select
+ * first so the CLI never opens a dialog by itself.
+ */
+function compilerInstalled(): boolean {
+  if (process.platform !== "darwin") return true;
+  return spawnSync("xcode-select", ["-p"], { stdio: "ignore" }).status === 0;
+}
+
+/** How to get the native hasher on this system, or null when none is needed. */
+export function hasherHint(): string | null {
+  if (resolveHasher().path) return null;
+  return process.platform === "darwin"
+    ? "For the fast native hasher, install Apple's command line tools once: xcode-select --install"
+    : "For the fast native hasher, install a C compiler (cc, gcc or clang).";
 }
 
 export function nativeHasherAvailable(): boolean {

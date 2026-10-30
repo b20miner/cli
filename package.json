@@ -9,14 +9,12 @@
   "files": [
     "dist",
     "native/hasher.c",
-    "native/prebuilt",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build:hasher": "cc -O3 -std=c11 -Wall -Wextra -o native/b20miner-hasher native/hasher.c",
-    "build:prebuilt": "node scripts/build-prebuilt.mjs",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && npm run build:prebuilt",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepack": "npm run build && npm test",
     "b20miner": "node src/main.ts",
     "test": "node --test test/*.test.ts",
@@ -46,5 +44,13 @@
     "chainId": 84532,
     "launchpad": "0x315Ce9b1a8473e3b2D10d4195F15470A66b7848d",
     "b20Mining": "0x315Ce9b1a8473e3b2D10d4195F15470A66b7848d"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/b20miner/cli.git"
+  },
+  "homepage": "https://docs.b20miner.xyz/reference/cli/",
+  "bugs": {
+    "url": "https://github.com/b20miner/cli/issues"
   }
 }

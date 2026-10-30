@@ -1,0 +1,36 @@
+name: Publish
+
+# Publishes the package to npm when a release is published on GitHub.
+# npm trusted publishing (OIDC): no token is stored here, and npm attaches a
+# provenance statement that links the package to this repository, this
+# workflow and the commit it was built from.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Release tag matches package version
+        run: test "v$(node -p 'require("./package.json").version')" = "${GITHUB_REF_NAME}"
+      - run: npm ci
+      - run: npm run build:hasher
+      - run: npm run typecheck
+      - run: npm test
+      - name: Package has no binaries
+        run: |
+          npm run build
+          npm pack --dry-run --json --ignore-scripts > pack.json
+          node -e 'const f=require("./pack.json")[0].files.map(x=>x.path); const bad=f.filter(p=>!/\.(js|c|md|json)$/.test(p) && p!=="LICENSE"); if(bad.length){console.error("unexpected files:",bad);process.exit(1)} console.log(f.length+" files")'
+      - run: npm publish --provenance --access public

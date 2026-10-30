@@ -3,7 +3,7 @@ import { BaseError, formatEther, formatUnits, parseEther, parseUnits, type Addre
 import { APP_URL, VERSION, knownTokens, networkConfig, parseAddress, redactRpc, rewardsSetting, saveRewardsTo, saveToken, savedToken, walletPath } from "./config.ts";
 import { ACTIVE, CAMPAIGN_ABI, ERC20_ABI, checkNetwork, listMiningTokens, publicClient, readCampaign, resolveToken, walletClient, zeroBits, type Campaign, type ListedToken, type Position, type Purpose } from "./chain.ts";
 import { DEFAULT_MAX_COST_WEI, parseEthAmount } from "./costs.ts";
-import { defaultWorkerCount, maxWorkerCount, resolveHasher } from "./hasher.ts";
+import { defaultWorkerCount, hasherHint, maxWorkerCount, resolveHasher } from "./hasher.ts";
 import { amount, mine } from "./mine.ts";
 import { readLine, readPassword } from "./prompt.ts";
 import { deliveryNext, formatDuration, holderText, leftToMine, proofsLeft, readiness } from "./status.ts";
@@ -494,7 +494,7 @@ async function info(): Promise<void> {
     ["RPC", redactRpc(config.rpcUrl)],
     ["Launchpad", `${config.launchpad} ${muted("(LaunchpadFactory)")}`],
     ["Token list", config.indexerUrl ? `${config.indexerUrl} ${muted("(chain if it fails)")}` : muted("chain only")],
-    ["Hasher", resolveHasher().path ? `native (${resolveHasher().kind})` : amber("built-in (slower) — no C compiler found")],
+    ["Hasher", resolveHasher().path ? `native (${resolveHasher().kind})` : `${amber("built-in (slower)")} ${muted(hasherHint() ?? "")}`],
     ["CPU workers", `default ${defaultWorkerCount()}, up to ${maxWorkerCount()}`],
     ["Wallet", walletExists() ? walletAddress() : amber("none yet")],
     ["Rewards to", rewardsTo() ?? (rewardsSetting() ? muted("this wallet") : amber("asked at the first start"))],
@@ -555,7 +555,7 @@ async function mineCommand(args: string[]): Promise<void> {
     return;
   }
   console.log(`\n  ${muted("Wallet")}  ${bold(address)}${to ? ` ${muted(`pays the fees · rewards to ${holderText(to)}`)}` : ""}`);
-  if (!resolveHasher().path) console.log(warn("No native hasher for this system; using the slower built-in one."));
+  if (!resolveHasher().path) console.log(warn(`Using the slower built-in hasher. ${hasherHint()}`));
   const password = await readPassword("  Password: ");
   const account = unlockWallet(password);
   await mine(config, client, account, c, { workers, maxProofs, maxCostWei, rewardsTo: to });

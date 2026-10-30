@@ -18,7 +18,7 @@ If npm says `EACCES` (macOS with the official Node installer), pick one:
 
 To try it without installing: `npx b20miner`.
 
-On macOS the fast native hasher ships prebuilt. On Linux it is built once on first use if a C compiler exists. Otherwise the CLI uses a slower built-in hasher.
+The package ships no binaries. The fast native hasher is built once on first use from the bundled C source (`native/hasher.c`) if a C compiler exists; on macOS that means Apple's command line tools (`xcode-select --install`). Otherwise the CLI uses a slower built-in hasher.
 
 ### From the repository (development)
 
@@ -63,7 +63,7 @@ npm ci
 npm run build:hasher   # the native hasher (needs a C compiler); tests use it
 npm test               # hasher vs the PoW test vectors, readiness, costs, update check
 npm run typecheck
-npm run build          # compile to dist/ + prebuilt hashers
+npm run build          # compile to dist/
 npm pack               # the exact tarball npm would publish
 ```
 

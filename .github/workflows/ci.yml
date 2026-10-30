@@ -1,0 +1,31 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build:hasher
+      - run: npm run typecheck
+      - run: npm test
+      # The published CLI supports Node 20: run the built CLI there too.
+      - run: npm run build
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - run: node dist/main.js info
