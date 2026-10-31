@@ -4,7 +4,7 @@ import { getAddress, type Address, type PublicClient } from "viem";
 import { cleanText, describeTokens, indexerTokenAddresses, resolveToken } from "../src/chain.ts";
 import type { NetworkConfig } from "../src/config.ts";
 
-const FACTORY = "0x315Ce9b1a8473e3b2D10d4195F15470A66b7848d" as Address;
+const FACTORY = "0x7e8220d399eeA7EE2b5c00152C12F692de6eeF7A" as Address;
 const ZERO = "0x0000000000000000000000000000000000000000";
 const WALLET = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as Address;
 const addr = (n: number) => getAddress(`0x${n.toString(16).padStart(40, "0")}`);
