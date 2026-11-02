@@ -22,8 +22,21 @@ export function bufferedGasLimit(estimatedGas: bigint): bigint {
   return (estimatedGas * 120n + 99n) / 100n;
 }
 
-export function maxProofCost(gasLimit: bigint, maxFeePerGas: bigint, quotedFee: bigint): bigint {
-  return gasLimit * maxFeePerGas + quotedFee;
+/** The most one proof can cost: the gas worst case plus the whole `msg.value` signed (not the quote). */
+export function maxProofCost(gasLimit: bigint, maxFeePerGas: bigint, sendValue: bigint): bigint {
+  return gasLimit * maxFeePerGas + sendValue;
+}
+
+/**
+ * Every Launchpad campaign charges the factory's fixed proof fee
+ * (`PROOF_FEE_WEI`, pinned in this build), and a proof's fee is never more.
+ * An RPC answer above it is refused before anything is signed (security
+ * review run-2: the value came from the RPC alone). Null when fine.
+ */
+export function proofValueProblem(sendValue: bigint, campaignProofFee: bigint, pinnedProofFee: bigint): string | null {
+  if (campaignProofFee !== pinnedProofFee || sendValue > pinnedProofFee)
+    return "The RPC reports a proof fee that this Launchpad never charges. Nothing was sent; check B20MINER_RPC_URL or try again.";
+  return null;
 }
 
 /** What the wallet must hold to send: the gas worst case plus the full `msg.value`. */

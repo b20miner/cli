@@ -1,4 +1,5 @@
-import { createPublicClient, createWalletClient, defineChain, getAddress, http, isAddress, parseAbi, type Address, type Chain, type Hex, type PublicClient } from "viem";
+import { createPublicClient, defineChain, getAddress, http, isAddress, parseAbi, type Address, type Chain, type Hex, type PublicClient } from "viem";
+import type { PrivateKeyAccount } from "viem/accounts";
 import type { NetworkConfig } from "./config.ts";
 
 /** The Launchpad factory surface the CLI reads (contracts/src/launchpad/LaunchpadFactory.sol). */
@@ -77,8 +78,36 @@ export function publicClient(config: NetworkConfig): PublicClient {
   return createPublicClient({ chain: chainOf(config), transport: http(config.rpcUrl, { timeout: 20_000, retryCount: 2 }) }) as PublicClient;
 }
 
-export function walletClient(config: NetworkConfig, account: Parameters<typeof createWalletClient>[0]["account"]) {
-  return createWalletClient({ chain: chainOf(config), transport: http(config.rpcUrl, { timeout: 20_000, retryCount: 2 }), account });
+/**
+ * Signs here and sends the raw transaction: chain id from this build's
+ * config, nonce, gas and fees read one by one. Never `eth_fillTransaction`,
+ * whose answer viem may keep (gas, fees, even the chain id it signs for)
+ * over what was checked (security review run-2). Missing gas and fees are
+ * estimated through `client`.
+ */
+export async function sendFromWallet(
+  client: PublicClient,
+  config: NetworkConfig,
+  account: PrivateKeyAccount,
+  tx: { to: Address; data?: Hex; value?: bigint; gas?: bigint; maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint },
+): Promise<Hex> {
+  const fees = tx.maxFeePerGas !== undefined && tx.maxPriorityFeePerGas !== undefined ? { maxFeePerGas: tx.maxFeePerGas, maxPriorityFeePerGas: tx.maxPriorityFeePerGas } : await client.estimateFeesPerGas();
+  const [nonce, gas] = await Promise.all([
+    client.getTransactionCount({ address: account.address, blockTag: "pending" }),
+    tx.gas ?? client.estimateGas({ account: account.address, to: tx.to, data: tx.data, value: tx.value }),
+  ]);
+  const serializedTransaction = await account.signTransaction({
+    type: "eip1559",
+    chainId: config.chainId,
+    nonce,
+    to: tx.to,
+    data: tx.data,
+    value: tx.value ?? 0n,
+    gas,
+    maxFeePerGas: fees.maxFeePerGas,
+    maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+  });
+  return client.sendRawTransaction({ serializedTransaction });
 }
 
 export class ChainError extends Error {}
@@ -433,7 +462,12 @@ export async function resolveToken(
 
   const knownSet = new Set(known.map((k) => k.toLowerCase()));
   let preferred: ListedToken[];
-  if (purpose === "mine") preferred = all.filter(mineable);
+  if (purpose === "mine") {
+    // A token this CLI used before wins over a newcomer with the same symbol, even when it is not
+    // mineable now: then nothing is picked and the addresses are listed (security review run-2).
+    const usedBefore = all.filter((t) => knownSet.has(t.token.toLowerCase()));
+    preferred = (usedBefore.length > 0 ? usedBefore : all).filter(mineable);
+  }
   else if (purpose === "hold" && opts.wallet) {
     const w = opts.wallet;
     const r = await client.multicall({

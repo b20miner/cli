@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { BaseError, formatEther, formatUnits, parseEther, parseUnits, type Address, type PublicClient } from "viem";
+import { BaseError, encodeFunctionData, formatEther, isAddress, formatUnits, parseEther, parseUnits, type Address, type PublicClient } from "viem";
 import { APP_URL, VERSION, knownTokens, networkConfig, parseAddress, redactRpc, rewardsSetting, saveRewardsTo, saveToken, savedToken, walletPath } from "./config.ts";
-import { ACTIVE, CAMPAIGN_ABI, ERC20_ABI, checkNetwork, listMiningTokens, publicClient, readCampaign, resolveToken, walletClient, zeroBits, type Campaign, type ListedToken, type Position, type Purpose } from "./chain.ts";
+import { ACTIVE, CAMPAIGN_ABI, ERC20_ABI, checkNetwork, listMiningTokens, publicClient, readCampaign, resolveToken, sendFromWallet, zeroBits, type Campaign, type ListedToken, type Position, type Purpose } from "./chain.ts";
 import { DEFAULT_MAX_COST_WEI, parseEthAmount } from "./costs.ts";
 import { defaultWorkerCount, hasherHint, maxWorkerCount, resolveHasher } from "./hasher.ts";
 import { amount, mine } from "./mine.ts";
@@ -249,7 +249,8 @@ function printCampaign(c: Campaign, p: Position, to: Address | null): void {
     ...(c.hourlySchedule && c.status === ACTIVE ? ([["Hourly release", `${muted("next share")} ${c.nextReleaseAt > c.now ? `in ${formatDuration(c.nextReleaseAt - c.now)}` : "now"}`]] as const) : []),
   ]));
   const r = readiness(c, p, to);
-  if (r.ready) console.log(`\n  ${bold("Next:")} ${cobalt(`b20miner start ${c.symbol}`)} ${muted("· Ctrl+C stops")}`);
+  // The address, never the symbol: a symbol is the creator's text, not shell-safe (security review run-2).
+  if (r.ready) console.log(`\n  ${bold("Next:")} ${cobalt(`b20miner start ${c.token}`)} ${muted("· Ctrl+C stops")}`);
   else console.log(`\n${warn(r.message)}\n  ${bold("Next:")} ${r.next}`);
   if (r.ready && p.mined > 0n) console.log(`  ${muted(deliveryNext(c, p, to))}`);
 }
@@ -451,7 +452,7 @@ async function tokens(): Promise<void> {
     console.log(`  ${bold(t.symbol.padEnd(w))}  ${tokenLine(t, t.now)}`);
     console.log(`  ${" ".repeat(w)}  ${muted(`${t.name} · ${t.token}`)}`);
   }
-  console.log(`\n  ${bold("Next:")} ${cobalt(`b20miner start ${mining[0]!.symbol}`)} ${muted(`· ${mining.length} token${mining.length === 1 ? "" : "s"} · from the ${source}`)}\n`);
+  console.log(`\n  ${bold("Next:")} ${cobalt(`b20miner start ${mining[0]!.token}`)} ${muted(`· ${mining[0]!.symbol} · ${mining.length} token${mining.length === 1 ? "" : "s"} · from the ${source}`)}\n`);
 }
 
 async function status(args: string[]): Promise<void> {
@@ -544,7 +545,15 @@ async function mineCommand(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  saveToken(c.token);
+  // A symbol names no token for sure: anyone can launch one with the same symbol. A token
+  // this CLI has not used before, named by symbol, is confirmed by its address first, and
+  // unattended runs must name it by address (security review run-2).
+  const bySymbol = args[0] !== undefined && !args[0].startsWith("--") && !isAddress(args[0], { strict: false });
+  if (bySymbol && !knownTokens().includes(c.token)) {
+    if (!process.stdin.isTTY) throw new Error(`"${c.symbol}" is a symbol, and anyone can make a token with any symbol. In unattended runs name the token by its address: b20miner start ${c.token}`);
+    console.log(`\n  ${amber("Check the address.")} ${muted(`Anyone can make a token called ${c.symbol}. This one is`)} ${bold(c.token)}${muted(`; compare it with the token page on ${APP_URL}.`)}`);
+    if ((await readLine(`  Type ${bold("yes")} to mine this token: `)).trim().toLowerCase() !== "yes") return void console.log(`  ${muted("Nothing mined.")}\n`);
+  }
 
   console.log(heading(`${c.symbol} mining`));
   printCampaign(c, p!, to);
@@ -558,6 +567,8 @@ async function mineCommand(args: string[]): Promise<void> {
   if (!resolveHasher().path) console.log(warn(`Using the slower built-in hasher. ${hasherHint()}`));
   const password = await readPassword("  Password: ");
   const account = unlockWallet(password);
+  // Remembered only once mining really starts, so a cancelled start leaves no token behind.
+  saveToken(c.token);
   await mine(config, client, account, c, { workers, maxProofs, maxCostWei, rewardsTo: to });
 }
 
@@ -580,8 +591,7 @@ async function claim(args: string[]): Promise<void> {
   }
   console.log(`\n  ${bold("Claim")} ${rose(amount(p!.claimable, c.symbol))} ${muted("into")} ${address}`);
   const account = unlockWallet(await readPassword("  Password: "));
-  const wallet = walletClient(config, account);
-  const hash = await wallet.writeContract({ address: c.campaign, abi: CAMPAIGN_ABI, functionName: "claim", account, chain: wallet.chain });
+  const hash = await sendFromWallet(client, config, account, { to: c.campaign, data: encodeFunctionData({ abi: CAMPAIGN_ABI, functionName: "claim" }) });
   console.log(`  ${muted("Sent")} ${config.explorerTx(hash)}`);
   const receipt = await client.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error("The claim reverted.");
@@ -606,6 +616,9 @@ async function rewardsCommand(args: string[]): Promise<void> {
 }
 
 /** `send ASSET TO [AMOUNT|all]`: ETH or a Launchpad token out of the wallet, after a yes. */
+/** Most gas an ETH send may use: a smart account's receive hook, not a lying RPC's figure. */
+const MAX_ETH_SEND_GAS = 100_000n;
+
 async function send(args: string[]): Promise<void> {
   const [asset, toArg, amountArg = "all"] = args;
   if (!asset || !toArg) throw new Error("Use: b20miner send ETH|TOKEN 0xTO [AMOUNT|all]   (b20miner help send)");
@@ -618,16 +631,19 @@ async function send(args: string[]): Promise<void> {
   const all = amountArg.toLowerCase() === "all";
 
   if (isEth) {
-    const [eth, fees] = await Promise.all([client.getBalance({ address }), client.estimateFeesPerGas()]);
-    // A plain transfer uses 21,000 gas; keep room for it (twice the fee, for a moving base fee).
-    const reserve = 21_000n * fees.maxFeePerGas * 2n;
+    const [eth, fees, code] = await Promise.all([client.getBalance({ address }), client.estimateFeesPerGas(), client.getCode({ address: to })]);
+    // 21,000 gas to a plain address; an address with code (a contract, an EIP-7702
+    // account) runs it, so that gas is estimated, within a bound an RPC cannot raise.
+    const gas = code && code !== "0x" ? await client.estimateGas({ account: address, to, value: 1n }) : 21_000n;
+    if (gas > MAX_ETH_SEND_GAS) throw new Error(`Sending ETH to ${to} would need ${gas} gas; the CLI sends at most ${MAX_ETH_SEND_GAS}.`);
+    // Keep room for the gas (twice the fee, for a moving base fee).
+    const reserve = gas * fees.maxFeePerGas * 2n;
     const value = all ? eth - reserve : parseEther(amountArg);
-    if (value <= 0n || value + 21_000n * fees.maxFeePerGas > eth) throw new Error(`Not enough ETH: the wallet holds ${formatEther(eth)} ETH.`);
+    if (value <= 0n || value + gas * fees.maxFeePerGas > eth) throw new Error(`Not enough ETH: the wallet holds ${formatEther(eth)} ETH.`);
     console.log(`\n  ${bold("Send")} ${rose(`${formatEther(value)} ETH`)} ${muted("to")} ${to}`);
     if ((await readLine(`  Type ${bold("yes")} to send: `)).trim().toLowerCase() !== "yes") return void console.log(`  ${muted("Nothing sent.")}\n`);
     const account = unlockWallet(await readPassword("  Password: "));
-    const wallet = walletClient(config, account);
-    const hash = await wallet.sendTransaction({ to, value, account, chain: wallet.chain });
+    const hash = await sendFromWallet(client, config, account, { to, value, gas, ...fees });
     console.log(`  ${muted("Sent")} ${config.explorerTx(hash)}`);
     const receipt = await client.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error("The transfer reverted.");
@@ -643,8 +659,7 @@ async function send(args: string[]): Promise<void> {
   console.log(`\n  ${bold("Send")} ${rose(amount(value, c.symbol, 6))} ${muted("to")} ${to}`);
   if ((await readLine(`  Type ${bold("yes")} to send: `)).trim().toLowerCase() !== "yes") return void console.log(`  ${muted("Nothing sent.")}\n`);
   const account = unlockWallet(await readPassword("  Password: "));
-  const wallet = walletClient(config, account);
-  const hash = await wallet.writeContract({ address: c.token, abi: ERC20_ABI, functionName: "transfer", args: [to, value], account, chain: wallet.chain });
+  const hash = await sendFromWallet(client, config, account, { to: c.token, data: encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [to, value] }) });
   console.log(`  ${muted("Sent")} ${config.explorerTx(hash)}`);
   const receipt = await client.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error("The transfer reverted.");

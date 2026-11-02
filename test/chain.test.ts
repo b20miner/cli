@@ -132,6 +132,12 @@ test("two tokens with one symbol: start picks the one mining now", async () => {
   assert.deepEqual(await resolveToken(c, noIndexer, "TWIN", { purpose: "mine" }), { token: addr(2), campaign: addr(1002) });
 });
 
+test("two tokens with one symbol: a newcomer never wins over the one this CLI used before (security review run-2)", async () => {
+  // 1 is the user's token, launched (not mineable); 2 is a look-alike that is mining.
+  const c = chain({ 1: { symbol: "TWIN", status: 1 }, 2: { symbol: "TWIN" } });
+  await assert.rejects(resolveToken(c, noIndexer, "TWIN", { purpose: "mine", known: [addr(1)] }), (e: Error) => e.message.includes(addr(1)) && e.message.includes(addr(2)));
+});
+
 test("two tokens with one symbol: claim and send pick the one this wallet mined", async () => {
   const c = chain({ 1: { symbol: "TWIN", status: 1, mined: 10n ** 22n }, 2: { symbol: "TWIN" } });
   assert.deepEqual(await resolveToken(c, noIndexer, "TWIN", { purpose: "hold", wallet: WALLET }), { token: addr(1), campaign: addr(1001) });

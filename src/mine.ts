@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { BaseError, ContractFunctionRevertedError, decodeEventLog, formatEther, formatUnits, type Address, type Hex, type PrivateKeyAccount, type PublicClient } from "viem";
+import { BaseError, ContractFunctionRevertedError, decodeEventLog, encodeFunctionData, formatEther, formatUnits, type Address, type Hex, type PrivateKeyAccount, type PublicClient } from "viem";
 import type { NetworkConfig } from "./config.ts";
-import { CAMPAIGN_ABI, readCampaign, readChallenge, walletClient, zeroBits, type Campaign, type Position } from "./chain.ts";
-import { bufferedGasLimit, maxProofCost, proofSendValue, requiredBalance } from "./costs.ts";
+import { CAMPAIGN_ABI, readCampaign, readChallenge, sendFromWallet, zeroBits, type Campaign, type Position } from "./chain.ts";
+import { bufferedGasLimit, maxProofCost, proofSendValue, proofValueProblem, requiredBalance } from "./costs.ts";
+import { DEPLOYMENT } from "./deployment.ts";
 import { startSearch, type Search } from "./hasher.ts";
 import { deliveryNext, formatDuration, holderText, leftToMine, proofsLeft, readiness } from "./status.ts";
 import { amber, bold, cobalt, dim, err, fault, muted, ok, rose, warn } from "./ui.ts";
@@ -139,7 +140,6 @@ export interface MineOptions {
 type Step = "continue" | "stop";
 
 export async function mine(config: NetworkConfig, client: PublicClient, account: PrivateKeyAccount, first: Campaign, options: MineOptions): Promise<void> {
-  const wallet = walletClient(config, account);
   const contract = first.campaign;
   const ref = { token: first.token, campaign: first.campaign };
   const to = options.rewardsTo && options.rewardsTo !== account.address ? options.rewardsTo : null;
@@ -207,6 +207,11 @@ export async function mine(config: NetworkConfig, client: PublicClient, account:
     ]);
     const quotedFee = p.quote.fee;
     const sendValue = proofSendValue(quotedFee, c.proofFee);
+    const valueProblem = proofValueProblem(sendValue, c.proofFee, BigInt(DEPLOYMENT.proofFeeWei));
+    if (valueProblem) {
+      console.log(err(valueProblem));
+      return "stop";
+    }
     const needed = requiredBalance(GAS_BEFORE_ESTIMATE, fees.maxFeePerGas, sendValue);
     if (balance < needed) {
       console.log(err(`Not enough ETH in the mining wallet: ${formatEther(balance)} ETH, need at least ${formatEther(needed)} ETH for the fee and gas.`));
@@ -286,7 +291,7 @@ export async function mine(config: NetworkConfig, client: PublicClient, account:
     let maxFeePerGas = fees.maxFeePerGas;
     let maxPriorityFeePerGas = fees.maxPriorityFeePerGas;
     for (;;) {
-      const worst = maxProofCost(gasLimit, maxFeePerGas, quotedFee);
+      const worst = maxProofCost(gasLimit, maxFeePerGas, sendValue);
       if (worst <= options.maxCostWei) break;
       console.log(warn(`Gas is expensive right now: up to ${formatEther(worst)} ETH for this proof, above your limit of ${formatEther(options.maxCostWei)} ETH. Holding the proof and checking again in 30 s.`));
       await sleep(COST_WAIT_MS);
@@ -306,17 +311,13 @@ export async function mine(config: NetworkConfig, client: PublicClient, account:
     try {
       let txHash: Hex;
       try {
-        txHash = await wallet.writeContract({
-          address: contract,
-          abi: CAMPAIGN_ABI,
-          functionName: "submitProof",
-          args: [owner, challenge, proof.nonce],
+        txHash = await sendFromWallet(client, config, account, {
+          to: contract,
+          data: encodeFunctionData({ abi: CAMPAIGN_ABI, functionName: "submitProof", args: [owner, challenge, proof.nonce] }),
           value: sendValue,
           gas: gasLimit,
           maxFeePerGas,
           maxPriorityFeePerGas,
-          chain: wallet.chain,
-          account,
         });
       } catch (error) {
         console.log(err(`Could not send the proof: ${describeRevert(error)}`));
