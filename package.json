@@ -42,8 +42,8 @@
   },
   "b20minerDeployment": {
     "chainId": 84532,
-    "launchpad": "0x7e8220d399eeA7EE2b5c00152C12F692de6eeF7A",
-    "b20Mining": "0x7e8220d399eeA7EE2b5c00152C12F692de6eeF7A"
+    "launchpad": "0x95814C2FF4005FcA3545c0a9d9aA20DA92f7644a",
+    "b20Mining": "0x95814C2FF4005FcA3545c0a9d9aA20DA92f7644a"
   },
   "repository": {
     "type": "git",
